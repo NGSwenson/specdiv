@@ -63,7 +63,7 @@ the spectral front-end.
 
 | Function | Role |
 |---|---|
-| `propagate_diversity()` | **the engine** — Monte Carlo Hill numbers (3 axes, orders q) with CIs |
+| `propagate_diversity()` | Monte Carlo Hill numbers (3 axes, orders q) with CIs |
 | `ses_structure()` | MPD/MNTD standardized effect sizes with CIs (needs `picante`) |
 | `diversity_from_labels()` | diversity from known identities (the validation target) |
 | `hill_taxonomic()`, `hill_phylo()`, `hill_functional()` | the underlying Hill-number formulas |
