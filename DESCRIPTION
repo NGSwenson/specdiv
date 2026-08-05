@@ -1,0 +1,37 @@
+Package: specdiv
+Title: Uncertainty-Aware Taxonomic, Phylogenetic and Functional Diversity from Predicted Species
+Version: 0.1.0
+Authors@R:
+    person("Nathan G.", "Swenson", email = "swenson228@gmail.com", role = c("aut", "cre"))
+Description: A nondestructive, uncertainty-aware framework for estimating the
+    taxonomic, phylogenetic and functional diversity of an assemblage from
+    per-individual species predictions rather than hard identifications. A
+    calibrated probabilistic classifier assigns each individual a probability
+    vector over candidate species; a Monte Carlo repeatedly draws identities,
+    reconstitutes each site, and recomputes diversity, so every per-site estimate
+    carries a confidence interval. All three axes are returned as Hill numbers of
+    matched order (a common "effective number of species" currency), together with
+    standardized effect sizes of assemblage structure. The engine is agnostic to
+    how the probabilities arise; a spectral front-end (leaf-clip reflectance,
+    PLS-DA) is provided for the leaf-spectroscopy case for which the framework was
+    developed, along with helpers for cross-campaign batch alignment and an
+    independent abundance prior for the open-species-pool setting.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Depends:
+    R (>= 4.0)
+Imports:
+    ape,
+    stats
+Suggests:
+    picante,
+    mixOmics,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+URL: https://github.com/nGSwenson/specdiv
+BugReports: https://github.com/nGSwenson/specdiv/issues

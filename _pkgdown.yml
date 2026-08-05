@@ -1,0 +1,36 @@
+url: https://github.com/nGSwenson/specdiv
+
+template:
+  bootstrap: 5
+
+reference:
+- title: Core engine
+  desc: Propagate classification uncertainty into per-site diversity.
+  contents:
+  - propagate_diversity
+  - ses_structure
+  - diversity_from_labels
+- title: Hill numbers
+  desc: The underlying effective-number-of-species formulas.
+  contents:
+  - hill_taxonomic
+  - hill_phylo
+  - hill_functional
+- title: Probability calibration
+  contents:
+  - scores_to_prob
+  - temperature_scale
+  - fit_temperature
+- title: Traits and priors
+  contents:
+  - trait_distance
+  - apply_abundance_prior
+- title: Spectral front-end
+  desc: Preprocessing and a PLS-DA classifier for leaf-clip reflectance.
+  contents:
+  - preprocess_spectra
+  - snv
+  - sg_derivative
+  - batch_align
+  - fit_spectral_classifier
+  - predict_probs

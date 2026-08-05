@@ -1,0 +1,171 @@
+---
+title: "Uncertainty-aware diversity from predicted species"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Uncertainty-aware diversity from predicted species}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 6, fig.height = 4)
+set.seed(1)
+```
+
+`specdiv` turns *probabilistic* species predictions into per-site taxonomic,
+phylogenetic and functional diversity that carries its own uncertainty. Instead
+of committing each individual to a single identification and computing one
+diversity number, it draws identities many times from a calibrated probability
+vector, reconstitutes each site on every draw, and reports the mean and a
+confidence interval for every axis — all three as Hill numbers of matched
+order, a common "effective number of species" currency.
+
+The engine does not care how the probabilities were produced. It was built for
+nondestructive leaf-clip reflectance spectra of tree seedlings, and a spectral
+front-end is provided for that case, but anything that emits a probability
+matrix — imaging spectroscopy, camera-trap classifiers, metabarcoding
+assignments — can drive it.
+
+```{r setup}
+library(specdiv)
+library(ape)
+```
+
+## What you need
+
+Three ingredients feed the engine:
+
+1. a **probability matrix** `P` (rows = individuals, columns = species),
+2. a **phylogeny** whose tip labels are those species (for the phylogenetic
+   axis), and
+3. a **functional distance matrix** among those species (for the functional
+   axis).
+
+Here we fabricate a tiny example. In practice `P` comes from your classifier
+(see the spectral front-end below), the tree from `V.PhyloMaker2` or your own,
+and the distances from measured traits via `trait_distance()`.
+
+```{r toy-data}
+species <- c("Acer", "Betula", "Corylus", "Fraxinus")
+
+# a phylogeny (tip labels must match the species columns of P)
+tree <- read.tree(text = "((Acer:1,Betula:1):1,(Corylus:1,Fraxinus:1):1);")
+
+# a functional distance matrix from two standardised traits
+traits <- rbind(Acer     = c(lma = 60, succ = 0.9),
+                Betula   = c(lma = 55, succ = 1.0),
+                Corylus  = c(lma = 90, succ = 0.6),
+                Fraxinus = c(lma = 85, succ = 0.7))
+Dfun <- trait_distance(traits)
+
+# 40 individuals across 4 sites, with a per-individual probability vector.
+n <- 40
+site  <- rep(1:4, each = 10)
+truth <- sample(species, n, replace = TRUE, prob = c(.4, .3, .2, .1))
+
+# a mock "classifier": mostly-right probabilities, sharper for some individuals
+P <- matrix(0.05, n, 4, dimnames = list(NULL, species))
+for (i in seq_len(n)) P[i, truth[i]] <- runif(1, 0.5, 0.95)
+P <- P / rowSums(P)
+head(round(P, 2))
+```
+
+## Calibrating the probabilities
+
+The probabilities are *sampled from*, so they must be honest: a stated 80%
+confidence should be right about 80% of the time. If you have cross-validated
+predictions and their true labels, `fit_temperature()` finds a one-parameter
+power scaling that matches mean confidence to accuracy, and `temperature_scale()`
+applies it.
+
+```{r calibrate}
+ft <- fit_temperature(P, truth)          # here P doubles as its own CV set
+ft$gamma
+P_cal <- temperature_scale(P, ft$gamma)
+```
+
+## Diversity with uncertainty
+
+`propagate_diversity()` is the core call. Give it the probabilities, the site
+of each individual, and (optionally) the tree and functional distances. With
+`truth` supplied it also returns the census-based `true_*` columns, so you can
+validate.
+
+```{r propagate}
+div <- propagate_diversity(
+  P_cal, site,
+  tree = tree, trait_dist = Dfun, truth = truth,
+  q = c(0, 1, 2), n_draws = 300, seed = 1
+)
+round(div[, c("site", "n_seedlings",
+              "TD1", "TD1_lo", "TD1_hi", "true_TD1",
+              "PD1", "true_PD1", "FD1", "true_FD1")], 2)
+```
+
+Each metric is named by axis (`TD` taxonomic, `PD` phylogenetic, `FD`
+functional) and order (`0`, `1`, `2`), with `_lo`/`_hi` giving the 95%
+Monte Carlo interval. A quick validation plot of the Shannon (q = 1) taxonomic
+axis against the census truth:
+
+```{r validate-plot, fig.alt = "Spectra-derived vs census diversity"}
+with(div, {
+  plot(true_TD1, TD1, pch = 19, xlab = "Census diversity",
+       ylab = "Predicted diversity", xlim = range(c(true_TD1, TD1_lo, TD1_hi)),
+       ylim = range(c(true_TD1, TD1_lo, TD1_hi)))
+  arrows(true_TD1, TD1_lo, true_TD1, TD1_hi, length = 0, col = "grey")
+  abline(0, 1, lty = 2)
+})
+```
+
+## Assemblage structure (clustering vs overdispersion)
+
+`ses_structure()` propagates the same uncertainty into standardized effect
+sizes of mean pairwise (MPD) and mean nearest-taxon distance (MNTD), on both
+axes, using **picante**. Negative values mean co-occurring individuals are more
+related / more similar than chance (clustering). This needs the `picante`
+package, so it is not evaluated here:
+
+```{r ses, eval = FALSE}
+ses <- ses_structure(P_cal, site, tree = tree, trait_dist = Dfun,
+                     truth = truth, n_draws = 200, runs = 499, seed = 1)
+ses[, c("site", "pMPD_ses", "pMPD_lo", "pMPD_hi", "fMPD_ses")]
+```
+
+## The spectral front-end
+
+For the leaf-spectroscopy case, the package supplies the steps that produce `P`
+from raw spectra. Preprocess identically for training and deployment, fit a
+PLS-DA classifier (via **mixOmics**), and predict probabilities:
+
+```{r spectral, eval = FALSE}
+Xtr <- preprocess_spectra(train_spectra, "deriv")   # SNV + 1st derivative
+Xte <- preprocess_spectra(plot_spectra,  "deriv")
+
+model <- fit_spectral_classifier(Xtr, train_species, ncomp = 24)
+P_raw <- predict_probs(model, Xte)
+
+# calibrate on cross-validated reference predictions, then propagate as above
+```
+
+Two deployment levers matter in practice, and both have helpers:
+
+- **Cross-campaign transfer.** A library ages: predicting a later season from an
+  earlier one transfers poorly. `batch_align(new_x, ref_x)` removes a global
+  batch offset; better still, re-anchor the library with a small same-season
+  re-scan.
+- **Open species pool.** Assuming the species present is powerful but often
+  impossible. Train a broad library and apply `apply_abundance_prior(P, counts)`,
+  where `counts` can be an independent, scan-free survey of a second set of
+  sites — it recovers most of the closed-set accuracy.
+
+```{r levers, eval = FALSE}
+P_aligned <- predict_probs(model, batch_align(Xte, Xtr))
+P_post    <- apply_abundance_prior(P_raw, independent_counts)
+```
+
+## Summary
+
+The load-bearing idea is that prediction is uncertain, and a diversity number
+computed from hard classifications hides that. `specdiv` keeps the uncertainty
+in view from the first probability to the final interval, and reports all three
+diversity axes in one currency so they can be read side by side.
