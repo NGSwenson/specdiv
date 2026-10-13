@@ -24,7 +24,7 @@ alignment, and an independent abundance prior) is included for that case.
 
 ```r
 # install.packages("remotes")
-remotes::install_github("nGSwenson/specdiv")
+remotes::install_github("NGSwenson/specdiv")
 ```
 
 The core engine depends only on `ape`. Two optional features pull heavier
